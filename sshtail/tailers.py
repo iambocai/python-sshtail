@@ -6,6 +6,8 @@
 
 import os
 import time
+# the offical paramiko does not support gssapi auth, which does not meet out needs, so we use SebastianDeiss's branch intstand
+# see the source at github ->  [https://github.com/SebastianDeiss/paramiko/tree/gssapi-integration]
 import paramiko
 
 
@@ -14,7 +16,7 @@ class SSHTailer(object):
     Class to handle the tailing of a single file via SSH.
     """
 
-    def __init__(self, host, remote_filename, private_key=None, verbose=False):
+    def __init__(self, host, remote_filename, private_key=None, verbose=False, gss_auth=False):
         if '@' in host:
             self.username, self.host = tuple(host.split('@'))
         else:
@@ -28,6 +30,7 @@ class SSHTailer(object):
         self.line_terminators_joined = '\r\n'
 
         self.verbose = verbose
+        self.gss_auth = gss_auth
 
 
     def connect(self):
@@ -37,7 +40,9 @@ class SSHTailer(object):
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        if self.private_key:
+        if self.gss_auth:
+            self.client.connect(self.host, username=self.username, gss_auth=self.gss_auth)
+        elif self.private_key:
             self.client.connect(self.host, username=self.username, pkey=self.private_key)
         else:
             self.client.connect(self.host, username=self.username)
@@ -105,7 +110,7 @@ class SSHMultiTailer(object):
     Class to handle tailing of multiple files.
     """
 
-    def __init__(self, host_files, poll_interval=2.0, private_key=None, verbose=False):
+    def __init__(self, host_files, poll_interval=2.0, private_key=None, verbose=False, gss_auth=False):
         """
         host_files is a dictionary whose keys must correspond to unique
         remote hosts to which this machine has access (ideally via SSH key).
@@ -118,6 +123,7 @@ class SSHMultiTailer(object):
         self.private_key = private_key
         self.tailers = {}
         self.verbose = verbose
+        self.gss_auth = gss_auth
 
 
     def connect(self):
@@ -131,7 +137,7 @@ class SSHMultiTailer(object):
         for host, files in self.host_files.iteritems():
             self.tailers[host] = {}
             for f in files:
-                self.tailers[host][f] = SSHTailer(host, f, private_key=self.private_key, verbose=self.verbose)
+                self.tailers[host][f] = SSHTailer(host, f, private_key=self.private_key, verbose=self.verbose, gss_auth=self.gss_auth)
 
 
 
